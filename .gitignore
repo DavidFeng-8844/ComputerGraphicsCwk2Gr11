@@ -1,0 +1,75 @@
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.vcxproj.filters
+*.sdf
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.opensdf
+*.db
+*.opendb
+
+# Build outputs
+_build_/
+bin/
+lib/
+Debug/
+Release/
+x64/
+x86/
+Win32/
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.exp
+*.obj
+*.iobj
+*.ipdb
+*.log
+
+# Premake5 generated files (if regenerated)
+# Uncomment if you want to ignore generated project files
+# *.vcxproj
+# *.sln
+
+# Large image files
+*.jpeg
+*.jpg
+*.png
+*.bmp
+*.tga
+*.hdr
+*.exr
+
+# Large model files (uncomment if you don't want to track these)
+# *.obj
+# *.mtl
+# *.fbx
+# *.dae
+# *.blend
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Logs
+*.log
+
