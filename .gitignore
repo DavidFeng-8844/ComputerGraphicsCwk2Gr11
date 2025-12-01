@@ -26,7 +26,6 @@ Win32/
 *.pdb
 *.ilk
 *.exp
-*.obj
 *.iobj
 *.ipdb
 *.log
@@ -36,16 +35,18 @@ Win32/
 # *.vcxproj
 # *.sln
 
-# Large image files
-*.jpeg
-*.jpg
-*.png
-*.bmp
-*.tga
-*.hdr
-*.exr
+# Large image files (uncomment if you want to ignore large textures)
+# Note: If you ignore these, make sure to provide alternative smaller textures
+# or document where to download them
+# *.jpeg
+# *.jpg
+# *.png
+# *.bmp
+# *.tga
+# *.hdr
+# *.exr
 
-# Large model files (uncomment if you don't want to track these)
+# Model files - keep these as they're needed at runtime
 # *.obj
 # *.mtl
 # *.fbx
