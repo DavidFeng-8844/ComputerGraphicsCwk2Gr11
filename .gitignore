@@ -35,23 +35,24 @@ Win32/
 # *.vcxproj
 # *.sln
 
-# Large image files (uncomment if you want to ignore large textures)
-# Note: If you ignore these, make sure to provide alternative smaller textures
-# or document where to download them
-# *.jpeg
-# *.jpg
-# *.png
-# *.bmp
-# *.tga
-# *.hdr
-# *.exr
+# Large image files - ignore large textures (4K+ images)
+# These are example resources, not required for code to compile/run
+*.jpeg
+*.jpg
+*.png
+*.bmp
+*.tga
+*.hdr
+*.exr
 
-# Model files - keep these as they're needed at runtime
-# *.obj
+# Large model files - ignore large OBJ files
+# These are example resources, students can use their own models
+*.obj
+# Keep .mtl files as they're small and useful for reference
 # *.mtl
-# *.fbx
-# *.dae
-# *.blend
+*.fbx
+*.dae
+*.blend
 
 # OS files
 .DS_Store
