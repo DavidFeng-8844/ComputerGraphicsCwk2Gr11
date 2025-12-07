@@ -99,17 +99,23 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="camera.hpp" />
     <ClInclude Include="checkpoint.hpp" />
     <ClInclude Include="debug_output.hpp" />
     <ClInclude Include="defaults.hpp" />
     <ClInclude Include="error.hpp" />
     <ClInclude Include="program.hpp" />
+    <ClInclude Include="simple_obj.hpp" />
+    <ClInclude Include="texture.hpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="camera.cpp" />
     <ClCompile Include="checkpoint.cpp" />
     <ClCompile Include="debug_output.cpp" />
     <ClCompile Include="error.cpp" />
     <ClCompile Include="program.cpp" />
+    <ClCompile Include="simple_obj.cpp" />
+    <ClCompile Include="texture.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -62,21 +62,27 @@ constexpr Mat44f kIdentity44f = { {
 constexpr
 Mat44f operator*( Mat44f const& aLeft, Mat44f const& aRight ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aLeft;   // Avoid warnings about unused arguments until the function
-	(void)aRight;  // is properly implemented.
-	return kIdentity44f;
+	Mat44f result{};
+	for (std::size_t i = 0; i < 4; ++i) {
+		for (std::size_t j = 0; j < 4; ++j) {
+			result.v[i*4 + j] = 0.f;
+			for (std::size_t k = 0; k < 4; ++k) {
+				result.v[i*4 + j] += aLeft.v[i*4 + k] * aRight.v[k*4 + j];
+			}
+		}
+	}
+	return result;
 }
 
 constexpr
 Vec4f operator*( Mat44f const& aLeft, Vec4f const& aRight ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aLeft;   // Avoid warnings about unused arguments until the function
-	(void)aRight;  // is properly implemented.
-	return { 0.f, 0.f, 0.f, 0.f };
+	Vec4f result{};
+	for (std::size_t i = 0; i < 4; ++i) {
+		result[i] = aLeft.v[i*4 + 0] * aRight.x + aLeft.v[i*4 + 1] * aRight.y + 
+		            aLeft.v[i*4 + 2] * aRight.z + aLeft.v[i*4 + 3] * aRight.w;
+	}
+	return result;
 }
 
 // Functions:
@@ -90,7 +96,7 @@ Mat44f transpose( Mat44f const& aM ) noexcept
 	for( std::size_t i = 0; i < 4; ++i )
 	{
 		for( std::size_t j = 0; j < 4; ++j )
-			ret[j,i] = aM[i,j];
+			ret.v[j*4 + i] = aM.v[i*4 + j];
 	}
 	return ret;
 }
@@ -98,42 +104,52 @@ Mat44f transpose( Mat44f const& aM ) noexcept
 inline
 Mat44f make_rotation_x( float aAngle ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aAngle; // Avoid warnings about unused arguments until the function
-	              // is properly implemented.
-	return kIdentity44f;
+	float c = std::cos(aAngle);
+	float s = std::sin(aAngle);
+	return Mat44f{ {
+		1.f, 0.f, 0.f, 0.f,
+		0.f,   c,  -s, 0.f,
+		0.f,   s,   c, 0.f,
+		0.f, 0.f, 0.f, 1.f
+	} };
 }
 
 
 inline
 Mat44f make_rotation_y( float aAngle ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aAngle; // Avoid warnings about unused arguments until the function
-	              // is properly implemented.
-	return kIdentity44f;
+	float c = std::cos(aAngle);
+	float s = std::sin(aAngle);
+	return Mat44f{ {
+		  c, 0.f,   s, 0.f,
+		0.f, 1.f, 0.f, 0.f,
+		 -s, 0.f,   c, 0.f,
+		0.f, 0.f, 0.f, 1.f
+	} };
 }
 
 inline
 Mat44f make_rotation_z( float aAngle ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aAngle; // Avoid warnings about unused arguments until the function
-	              // is properly implemented.
-	return kIdentity44f;
+	float c = std::cos(aAngle);
+	float s = std::sin(aAngle);
+	return Mat44f{ {
+		  c,  -s, 0.f, 0.f,
+		  s,   c, 0.f, 0.f,
+		0.f, 0.f, 1.f, 0.f,
+		0.f, 0.f, 0.f, 1.f
+	} };
 }
 
 inline
 Mat44f make_translation( Vec3f aTranslation ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aTranslation; // Avoid warnings about unused arguments until the function
-	                    // is properly implemented.
-	return kIdentity44f;
+	return Mat44f{ {
+		1.f, 0.f, 0.f, aTranslation.x,
+		0.f, 1.f, 0.f, aTranslation.y,
+		0.f, 0.f, 1.f, aTranslation.z,
+		0.f, 0.f, 0.f, 1.f
+	} };
 }
 inline
 Mat44f make_scaling( float aSX, float aSY, float aSZ ) noexcept
@@ -149,13 +165,13 @@ Mat44f make_scaling( float aSX, float aSY, float aSZ ) noexcept
 inline
 Mat44f make_perspective_projection( float aFovInRadians, float aAspect, float aNear, float aFar ) noexcept
 {
-	//TODO: your implementation goes here
-	//TODO: remove the following when you start your implementation
-	(void)aFovInRadians; // Avoid warnings about unused arguments until the function
-	(void)aAspect;       // is properly implemented.
-	(void)aNear;
-	(void)aFar;
-	return kIdentity44f;
+	float f = 1.f / std::tan(aFovInRadians / 2.f);
+	return Mat44f{ {
+		f/aAspect, 0.f, 0.f, 0.f,
+		0.f, f, 0.f, 0.f,
+		0.f, 0.f, (aFar + aNear) / (aNear - aFar), (2.f * aFar * aNear) / (aNear - aFar),
+		0.f, 0.f, -1.f, 0.f
+	} };
 }
 
 #endif // MAT44_HPP_E7187A26_469E_48AD_A3D2_63150F05A4CA

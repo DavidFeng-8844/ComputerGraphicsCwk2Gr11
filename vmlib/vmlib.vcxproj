@@ -109,6 +109,7 @@
   <ItemGroup>
     <ClCompile Include="empty.cpp" />
     <ClCompile Include="mat44.cpp" />
+    <ClCompile Include="mat44_fixed.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

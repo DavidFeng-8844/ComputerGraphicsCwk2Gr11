@@ -24,24 +24,24 @@ TEST_CASE( "Perspective projection", "[mat44]" )
 			0.1f, 100.f
 		);
 
-		REQUIRE_THAT( (proj[0,0]), WithinAbs( 0.974279, kEps_ ) );
-		REQUIRE_THAT( (proj[0,1]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[0,2]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[0,3]), WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[0], WithinAbs( 0.974279, kEps_ ) );
+		REQUIRE_THAT( proj.v[1], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[2], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[3], WithinAbs( 0.f, kEps_ ) );
 
-		REQUIRE_THAT( (proj[1,0]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[1,1]), WithinAbs( 1.732051f, kEps_ ) );
-		REQUIRE_THAT( (proj[1,2]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[1,3]), WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[4], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[5], WithinAbs( 1.732051f, kEps_ ) );
+		REQUIRE_THAT( proj.v[6], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[7], WithinAbs( 0.f, kEps_ ) );
 
-		REQUIRE_THAT( (proj[2,0]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[2,1]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[2,2]), WithinAbs( -1.002002f, kEps_ ) );
-		REQUIRE_THAT( (proj[2,3]), WithinAbs( -0.200200f, kEps_ ) );
+		REQUIRE_THAT( proj.v[8], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[9], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[10], WithinAbs( -1.002002f, kEps_ ) );
+		REQUIRE_THAT( proj.v[11], WithinAbs( -0.200200f, kEps_ ) );
 
-		REQUIRE_THAT( (proj[3,0]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[3,1]), WithinAbs( 0.f, kEps_ ) );
-		REQUIRE_THAT( (proj[3,2]), WithinAbs( -1.f, kEps_ ) );
-		REQUIRE_THAT( (proj[3,3]), WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[12], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[13], WithinAbs( 0.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[14], WithinAbs( -1.f, kEps_ ) );
+		REQUIRE_THAT( proj.v[15], WithinAbs( 0.f, kEps_ ) );
 	}
 }
