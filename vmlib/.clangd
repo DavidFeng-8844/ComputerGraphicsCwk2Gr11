@@ -1,0 +1,5 @@
+CompileFlags:
+  Add: [-std=c++23, -Wno-error]
+Diagnostics:
+  Suppress: [too-many-parameters]
+

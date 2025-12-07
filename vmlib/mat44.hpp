@@ -2,6 +2,11 @@
 #define MAT44_HPP_E7187A26_469E_48AD_A3D2_63150F05A4CA
 // SOLUTION_TAGS: gl-(ex-[^12]|cw-2|resit)
 
+// This file requires C++23 for multi-parameter operator[]
+// Multi-dimensional subscript operator[] is a C++23 feature (P2128)
+// Note: IntelliSense may show E0344 errors, but actual compilation with 
+// /std:c++latest should work correctly. The feature is available in MSVC 19.30+
+
 #include <cmath>
 #include <cassert>
 #include <cstdlib>
@@ -30,10 +35,19 @@
  *   ⎜ 2,0  2,1  2,2  2,3 ⎟
  *   ⎝ 3,0  3,1  3,2  3,3 ⎠
  */
+
+// C++23 multi-parameter operator[] (P2128)
+// This is valid C++23 syntax. IntelliSense may show E0344 errors on lines 56 and 62,
+// but these are false positives. The code compiles correctly with /std:c++latest (C++23)
+// and /wd5246 in project settings (vmlib.vcxproj).
+
 struct Mat44f
 {
 	float v[16];
 
+	// C++23 multi-parameter operator[] (P2128)
+	// This is valid C++23 syntax. IntelliSense may show E0344 errors, 
+	// but these are false positives. Actual compilation works correctly.
 	constexpr
 	float& operator[] (std::size_t aI, std::size_t aJ) noexcept
 	{

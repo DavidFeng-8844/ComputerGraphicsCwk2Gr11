@@ -100,3 +100,19 @@ void Camera::update_vectors() noexcept
 	// Calculate up vector
 	up = normalize(cross(right, forward));
 }
+
+void Camera::look_at(Vec3f const& target, Vec3f const& worldUp) noexcept
+{
+	// Calculate forward direction (from camera to target)
+	forward = normalize(target - position);
+	
+	// Calculate right vector
+	right = normalize(cross(forward, worldUp));
+	
+	// Calculate up vector
+	up = normalize(cross(right, forward));
+	
+	// Update yaw and pitch from forward vector
+	pitch = std::asin(forward.y);
+	yaw = std::atan2(forward.z, forward.x);
+}

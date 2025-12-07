@@ -61,7 +61,7 @@
       <Optimization>Disabled</Optimization>
       <MinimalRebuild>false</MinimalRebuild>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 /wd5246 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalWarningLevel>Level3</ExternalWarningLevel>
     </ClCompile>
@@ -85,9 +85,10 @@
       <MinimalRebuild>false</MinimalRebuild>
       <StringPooling>true</StringPooling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 /wd5246 /wd4623 /wd4625 /wd4626 /Zc:__cplusplus %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalWarningLevel>Level3</ExternalWarningLevel>
+      <CppLanguageStandard>stdcpp23</CppLanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -104,8 +105,10 @@
     <ClInclude Include="debug_output.hpp" />
     <ClInclude Include="defaults.hpp" />
     <ClInclude Include="error.hpp" />
+    <ClInclude Include="primitive_shapes.hpp" />
     <ClInclude Include="program.hpp" />
     <ClInclude Include="simple_obj.hpp" />
+    <ClInclude Include="space_vehicle.hpp" />
     <ClInclude Include="texture.hpp" />
   </ItemGroup>
   <ItemGroup>
@@ -113,8 +116,10 @@
     <ClCompile Include="checkpoint.cpp" />
     <ClCompile Include="debug_output.cpp" />
     <ClCompile Include="error.cpp" />
+    <ClCompile Include="primitive_shapes.cpp" />
     <ClCompile Include="program.cpp" />
     <ClCompile Include="simple_obj.cpp" />
+    <ClCompile Include="space_vehicle.cpp" />
     <ClCompile Include="texture.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

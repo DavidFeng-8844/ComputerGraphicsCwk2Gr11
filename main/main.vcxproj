@@ -63,7 +63,7 @@
       <Optimization>Disabled</Optimization>
       <MinimalRebuild>false</MinimalRebuild>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 /wd5246 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalWarningLevel>Level3</ExternalWarningLevel>
     </ClCompile>
@@ -85,7 +85,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <StringPooling>true</StringPooling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalOptions>/utf-8 /permissive- /wd4456 /wd5311 /wd5246 %(AdditionalOptions)</AdditionalOptions>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalWarningLevel>Level3</ExternalWarningLevel>
     </ClCompile>

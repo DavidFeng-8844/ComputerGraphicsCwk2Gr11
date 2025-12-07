@@ -1,5 +1,16 @@
+// Suppress warning about multi-parameter operator[] (C++23 feature)
+// This file uses mat[0,0] syntax which is valid C++23 but may generate warnings
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable: 5246)  // 'operator[]': too many parameters for this operator function
+#endif
+
 #include "mat44.hpp"
 // SOLUTION_TAGS: gl-(ex-[^1234]|cw-2|resit)
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 Mat44f invert( Mat44f const& aM ) noexcept
 {
