@@ -652,7 +652,7 @@ int main() try
 	altitudeLabel->set_color(Vec4f{1.0f, 1.0f, 0.0f, 1.0f});  // Yellow text
 	
 	// Add launch button (bottom center)
-	UIButton* launchButton = uiSystem.add_button("Launch", 120.0f, 40.0f, UIAnchor::BottomCenter, -70.0f, 60.0f,
+	uiSystem.add_button("Launch", 120.0f, 40.0f, UIAnchor::BottomCenter, -70.0f, 60.0f,
 		[&state]() {
 			// Launch callback
 			state.animationActive = true;
@@ -661,7 +661,7 @@ int main() try
 		});
 	
 	// Add reset button (bottom center, to the right of launch button)
-	UIButton* resetButton = uiSystem.add_button("Reset", 120.0f, 40.0f, UIAnchor::BottomCenter, 70.0f, 60.0f,
+	uiSystem.add_button("Reset", 120.0f, 40.0f, UIAnchor::BottomCenter, 70.0f, 60.0f,
 		[&state]() {
 			// Reset callback
 			state.animationActive = false;
@@ -705,7 +705,6 @@ int main() try
 
 	// Timing
 	double lastTime = glfwGetTime();
-	double lastPrintTime = glfwGetTime();
 	
 	// Task 1.12: Performance measurement
 	// To enable: define ENABLE_PERFORMANCE_MEASUREMENT in performance_timer.hpp

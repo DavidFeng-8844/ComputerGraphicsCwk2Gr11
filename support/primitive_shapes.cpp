@@ -304,8 +304,7 @@ void transform_mesh(SimpleObjMesh& mesh, Mat44f const& transform)
 	
 	// Transform normals (use upper 3x3 of transform, then normalize)
 	// For proper normal transformation, we need the inverse transpose of the upper 3x3
-	Mat44f inv_transform = invert(transform);
-	Mat44f normal_transform = transpose(inv_transform);
+	Mat44f normal_transform = transpose(invert(transform));
 	
 	for (auto& normal : mesh.normals)
 	{
