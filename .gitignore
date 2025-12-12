@@ -75,3 +75,6 @@ desktop.ini
 # Logs
 *.log
 
+# Report folder - ignore everything except report.pdf
+report/*
+!report/report.pdf
