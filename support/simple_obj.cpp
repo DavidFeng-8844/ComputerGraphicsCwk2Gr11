@@ -145,7 +145,7 @@ SimpleObjMesh load_simple_obj(std::string const& path)
 					}
 					
 					// Add texture coordinates
-					if (tex_idx > 0 && (tex_idx - 1) * 2 + 1 < temp_texcoords.size())
+					if (tex_idx > 0 && static_cast<size_t>((tex_idx - 1) * 2 + 1) < temp_texcoords.size())
 					{
 						mesh.texcoords.push_back(temp_texcoords[(tex_idx - 1) * 2]);
 						mesh.texcoords.push_back(temp_texcoords[(tex_idx - 1) * 2 + 1]);

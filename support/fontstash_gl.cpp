@@ -14,8 +14,16 @@
 #include <cstdio>
 #include <print>
 
+#define FONS_NO_STDIO
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+#endif
 #define FONTSTASH_IMPLEMENTATION
 #include <fontstash.h>
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 
 // OpenGL Fontstash implementation
 struct GLFONScontext
