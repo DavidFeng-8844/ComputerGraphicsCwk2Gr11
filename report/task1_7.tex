@@ -1,0 +1,67 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{helvet}
+\usepackage{inconsolata}
+\usepackage{amsmath}
+
+\geometry{margin=0.75in}
+\renewcommand{\familydefault}{\sfdefault}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black}
+
+\begin{document}
+
+\begin{center}
+\textbf{\large Task 1.7: Space Vehicle Animation}\\[0.3em]
+\textit{COMP3811 Computer Graphics -- Coursework 2}
+\end{center}
+
+\textbf{Overview.}
+This section details the implementation of a procedural animation system for the space vehicle. The animation simulates a rocket launch sequence with a curved trajectory, dynamic acceleration, and automatic orientation alignment. The system is interactive, allowing the user to control the playback state, and integrates seamlessly with the dynamic lighting system developed in Section 1.6.
+
+\textbf{Interaction Design.}
+The animation state is managed through a state machine within the main application loop, controlled by user input via \texttt{GLFW} key callbacks:
+\begin{itemize}
+    \item \textbf{Start/Pause (F Key):} Pressing \texttt{F} toggles the animation state. If the animation is inactive, it initializes the \texttt{animationActive} flag and resets the timer. If already active, it toggles the \texttt{animationPaused} flag, allowing users to freeze the vehicle mid-flight for inspection.
+    \item \textbf{Reset (R Key):} Pressing \texttt{R} completely resets the simulation. The vehicle returns to its launch position (\texttt{vehicleOriginalPos}), the timer is zeroed, and the animation logic is disabled until the next start command.
+\end{itemize}
+
+\textbf{Trajectory Generation.}
+The vehicle's flight path is defined procedurally using parametric equations based on the elapsed animation time $t$. To satisfy the requirement for a "curved path where it slowly accelerates from a standstill," the trajectory combines three distinct motion components:
+
+\begin{enumerate}
+    \item \textbf{Vertical Ascent ($Y$):} The height is modeled to simulate a rapid initial climb that gradually levels off, mimicking a gravity turn. This is achieved using a quadratic damping function: $y(t) = H \cdot t \cdot (1 - k \cdot t)$, where $H$ scales the maximum height.
+    \item \textbf{Forward Acceleration ($Z$):} Forward movement follows a cubic function $z(t) = -D \cdot t^3$. This ensures the velocity starts at zero and increases non-linearly, providing the visual effect of the vehicle building up thrust and overcoming inertia.
+    \item \textbf{Horizontal Arc ($X$):} To add complexity to the curve, a sine wave function $x(t) = A \cdot \sin(\frac{\pi}{2}t)$ introduces a lateral arc, resulting in a 3D corkscrew-like trajectory rather than a simple 2D parabola.
+\end{enumerate}
+
+The system handles these phases using a normalized time parameter that transitions from an acceleration phase (quadratic interpolation) to a coasting phase (linear interpolation) after a fixed duration (3.0 seconds).
+
+\textbf{Orientation and Alignment.}
+To ensure the vehicle always faces its direction of travel, the system calculates the instantaneous velocity vector $\mathbf{v}$ by computing the analytical derivatives of the position functions ($dx/dt, dy/dt, dz/dt$) with respect to time.
+
+The orientation is derived by aligning the vehicle's local up vector ($\mathbf{up} = (0, 1, 0)$) with the normalized velocity vector $\hat{\mathbf{v}}$. This alignment is computed using the axis-angle rotation method:
+\begin{enumerate}
+    \item \textbf{Rotation Axis:} $\mathbf{axis} = \mathbf{up} \times \hat{\mathbf{v}}$
+    \item \textbf{Rotation Angle:} $\theta = \arccos(\mathbf{up} \cdot \hat{\mathbf{v}})$
+\end{enumerate}
+
+A rotation matrix is constructed from this axis and angle using Rodrigues' rotation formula and applied to the vehicle's model matrix. This ensures the rocket tilts naturally into the curve as it accelerates.
+
+\textbf{Dynamic Lighting Integration.}
+The three point lights implemented in Section 1.6 are attached to the vehicle's local coordinate system. In every frame of the animation, the light positions are updated by adding their constant local offsets to the vehicle's current world position. These updated positions are passed to the shader uniforms, ensuring the coloured glow travels with the rocket, illuminating the launchpad during takeoff and the terrain during flight.
+
+\textbf{Visual Result.}
+
+\textbf{[Figure 1.7.1: The space vehicle mid-flight, demonstrating the curved trajectory and orientation alignment. The coloured point lights can be seen traveling with the vehicle, illuminating the surrounding air.]}
+
+\end{document}
+

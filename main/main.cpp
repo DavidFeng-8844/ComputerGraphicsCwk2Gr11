@@ -18,6 +18,9 @@
 #include "../support/simple_obj.hpp"
 #include "../support/texture.hpp"
 #include "../support/space_vehicle.hpp"
+#include "../support/particle_system.hpp"
+#include "../support/ui_system.hpp"
+#include "../support/performance_timer.hpp"
 
 #include "../vmlib/vec4.hpp"
 
@@ -74,6 +77,15 @@ namespace
 		bool animationPaused = false;
 		double animationTime = 0.0;  // Time since animation started
 		Vec3f vehicleOriginalPos;    // Original position of vehicle
+		
+		// Split screen state (Task 1.9)
+		bool splitScreenMode = false;
+		Camera leftCamera;           // Camera for left view
+		CameraMode leftCameraMode = CameraMode::Free;
+		Camera leftFreeCamera;       // Store left free camera state
+		Camera rightCamera;          // Camera for right view
+		CameraMode rightCameraMode = CameraMode::Follow;
+		Camera rightFreeCamera;      // Store right free camera state
 	};
 	
 	// Helper function to set lighting uniforms
@@ -121,6 +133,274 @@ namespace
 		GLint locShininess = glGetUniformLocation( programId, "uShininess" );
 		if (locShininess >= 0)
 			glUniform1f( locShininess, shininess );
+	}
+	
+	// Helper function to render the scene (Task 1.9 - for split screen)
+	// This function encapsulates all rendering logic to avoid code duplication
+	// Task 1.12: Added performance measurement parameter
+	void render_scene(
+		Camera const& camera,
+		float viewportWidth, float viewportHeight,
+		ShaderProgram const& prog,
+		ShaderProgram const& materialProg,
+		ShaderProgram const& particleProg,
+		SimpleObjMesh const& terrain,
+		GLuint terrain_texture,
+		SimpleObjMesh const& launchpad,
+		Vec3f const& launchpadA_pos,
+		Vec3f const& launchpadB_pos,
+		std::vector<VehiclePart> const& vehicle_parts,
+		Vec3f const& current_vehicle_pos,
+		Mat44f const& vehicle_rotation,
+		Vec3f const& dirLightDirection,
+		Vec3f const& dirLightColor,
+		Vec3f const& pointLight1_pos,
+		Vec3f const& pointLight1_color,
+		Vec3f const& pointLight2_pos,
+		Vec3f const& pointLight2_color,
+		Vec3f const& pointLight3_pos,
+		Vec3f const& pointLight3_color,
+		float shininess,
+		ParticleSystem& particleSystem,
+		PerformanceMeasurement* perfMeasure = nullptr)
+	{
+		// Calculate matrices
+		Mat44f model = kIdentity44f;
+		Mat44f view = camera.get_view_matrix();
+		Mat44f projection = make_perspective_projection(
+			60.f * std::numbers::pi_v<float> / 180.f,  // 60 degree FOV
+			viewportWidth / viewportHeight,             // aspect ratio
+			0.1f,                                       // near plane
+			10000.f                                     // far plane
+		);
+		
+		// Render terrain with texture (Section 1.2)
+		if (perfMeasure) perfMeasure->begin_gpu_section("Terrain");
+		{
+			glUseProgram( prog.programId() );
+			
+			Mat44f mvp = projection * view * model;
+			
+			// Set uniforms
+			GLint locMVP = glGetUniformLocation( prog.programId(), "uModelViewProjection" );
+			GLint locModel = glGetUniformLocation( prog.programId(), "uModel" );
+			GLint locNormal = glGetUniformLocation( prog.programId(), "uNormalMatrix" );
+			GLint locTexture = glGetUniformLocation( prog.programId(), "uTexture" );
+			GLint locUseTexture = glGetUniformLocation( prog.programId(), "uUseTexture" );
+			
+			glUniformMatrix4fv( locMVP, 1, GL_TRUE, mvp.v );
+			glUniformMatrix4fv( locModel, 1, GL_TRUE, model.v );
+			
+			// Normal matrix (upper 3x3 of model matrix, for now just identity)
+			float normalMat[9] = { 1,0,0, 0,1,0, 0,0,1 };
+			glUniformMatrix3fv( locNormal, 1, GL_TRUE, normalMat );
+			
+			// Set lighting uniforms
+			Vec3f cameraPos = camera.get_position();
+			set_lighting_uniforms( prog.programId(), cameraPos,
+				dirLightDirection, dirLightColor,
+				pointLight1_pos, pointLight1_color,
+				pointLight2_pos, pointLight2_color,
+				pointLight3_pos, pointLight3_color,
+				shininess );
+			
+			// Bind texture if available
+			if (terrain_texture != 0)
+			{
+				glActiveTexture( GL_TEXTURE0 );
+				glBindTexture( GL_TEXTURE_2D, terrain_texture );
+				glUniform1i( locTexture, 0 );
+				glUniform1i( locUseTexture, 1 );
+			}
+			else
+			{
+				glUniform1i( locUseTexture, 0 );
+			}
+			
+			// Draw terrain
+			glBindVertexArray( terrain.vao );
+			glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(terrain.indices.size()), GL_UNSIGNED_INT, nullptr );
+			glBindVertexArray( 0 );
+		}
+		if (perfMeasure) perfMeasure->end_gpu_section("Terrain");
+		
+		// Draw two launchpad instances with material color (Section 1.4)
+		if (perfMeasure) perfMeasure->begin_gpu_section("Launchpad");
+		{
+			glUseProgram( materialProg.programId() );
+			GLint locMVP_mat = glGetUniformLocation( materialProg.programId(), "uModelViewProjection" );
+			GLint locModel_mat = glGetUniformLocation( materialProg.programId(), "uModel" );
+			GLint locNormal_mat = glGetUniformLocation( materialProg.programId(), "uNormalMatrix" );
+			GLint locMatColor   = glGetUniformLocation( materialProg.programId(), "uMaterialColor" );
+
+			// Set lighting uniforms for material shader
+			Vec3f cameraPos = camera.get_position();
+			set_lighting_uniforms( materialProg.programId(), cameraPos,
+				dirLightDirection, dirLightColor,
+				pointLight1_pos, pointLight1_color,
+				pointLight2_pos, pointLight2_color,
+				pointLight3_pos, pointLight3_color,
+				shininess );
+
+			float normalMat3[9] = { 1,0,0, 0,1,0, 0,0,1 };
+			Vec3f matCol = launchpad.has_material_color ? launchpad.material_color : Vec3f{0.8f,0.8f,0.8f};
+
+			// Instance A: scaled 5x
+			{
+				Mat44f S = kIdentity44f;
+				S.v[0] = 5.0f; S.v[5] = 5.0f; S.v[10] = 5.0f;
+				Mat44f T = make_translation( launchpadA_pos );
+				Mat44f M = T * S;
+				Mat44f MVP = projection * view * M;
+				glUniformMatrix4fv( locMVP_mat, 1, GL_TRUE, MVP.v );
+				glUniformMatrix4fv( locModel_mat, 1, GL_TRUE, M.v );
+				glUniformMatrix3fv( locNormal_mat, 1, GL_TRUE, normalMat3 );
+				glUniform3f( locMatColor, matCol.x, matCol.y, matCol.z );
+				glBindVertexArray( launchpad.vao );
+				glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(launchpad.indices.size()), GL_UNSIGNED_INT, nullptr );
+				glBindVertexArray( 0 );
+			}
+
+			// Instance B: scaled 5x
+			{
+				Mat44f S = kIdentity44f;
+				S.v[0] = 5.0f; S.v[5] = 5.0f; S.v[10] = 5.0f;
+				Mat44f T = make_translation( launchpadB_pos );
+				Mat44f M = T * S;
+				Mat44f MVP = projection * view * M;
+				glUniformMatrix4fv( locMVP_mat, 1, GL_TRUE, MVP.v );
+				glUniformMatrix4fv( locModel_mat, 1, GL_TRUE, M.v );
+				glUniformMatrix3fv( locNormal_mat, 1, GL_TRUE, normalMat3 );
+				glUniform3f( locMatColor, matCol.x, matCol.y, matCol.z );
+				glBindVertexArray( launchpad.vao );
+				glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(launchpad.indices.size()), GL_UNSIGNED_INT, nullptr );
+				glBindVertexArray( 0 );
+			}
+		}
+		if (perfMeasure) perfMeasure->end_gpu_section("Launchpad");
+
+		// Draw space vehicle on launchpad A (Section 1.5)
+		if (perfMeasure) perfMeasure->begin_gpu_section("Vehicle");
+		{
+			glUseProgram( materialProg.programId() );
+			GLint locMVP_mat = glGetUniformLocation( materialProg.programId(), "uModelViewProjection" );
+			GLint locModel_mat = glGetUniformLocation( materialProg.programId(), "uModel" );
+			GLint locNormal_mat = glGetUniformLocation( materialProg.programId(), "uNormalMatrix" );
+			GLint locMatColor   = glGetUniformLocation( materialProg.programId(), "uMaterialColor" );
+
+			// Set lighting uniforms for material shader
+			Vec3f cameraPos = camera.get_position();
+			set_lighting_uniforms( materialProg.programId(), cameraPos,
+				dirLightDirection, dirLightColor,
+				pointLight1_pos, pointLight1_color,
+				pointLight2_pos, pointLight2_color,
+				pointLight3_pos, pointLight3_color,
+				shininess );
+
+			// Transform to place vehicle (with animation)
+			Mat44f vehicle_translate = make_translation(current_vehicle_pos);
+			Mat44f vehicle_model = vehicle_translate * vehicle_rotation;
+			
+			// Calculate normal matrix (for now identity since we're only translating)
+			float normalMat3[9] = { 1,0,0, 0,1,0, 0,0,1 };
+			
+			// Render each part with its own color
+			for (const auto& part : vehicle_parts)
+			{
+				Mat44f MVP = projection * view * vehicle_model;
+				glUniformMatrix4fv( locMVP_mat, 1, GL_TRUE, MVP.v );
+				glUniformMatrix4fv( locModel_mat, 1, GL_TRUE, vehicle_model.v );
+				glUniformMatrix3fv( locNormal_mat, 1, GL_TRUE, normalMat3 );
+				glUniform3f( locMatColor, part.color.x, part.color.y, part.color.z );
+				
+				glBindVertexArray( part.mesh.vao );
+				glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(part.mesh.indices.size()), GL_UNSIGNED_INT, nullptr );
+				glBindVertexArray( 0 );
+			}
+		}
+		if (perfMeasure) perfMeasure->end_gpu_section("Vehicle");
+		
+		// Render particles (Task 1.10)
+		{
+			glUseProgram( particleProg.programId() );
+			
+			// Set uniforms
+			Mat44f viewProjection = projection * view;
+			GLint locVP = glGetUniformLocation( particleProg.programId(), "uViewProjection" );
+			GLint locCamPos = glGetUniformLocation( particleProg.programId(), "uCameraPosition" );
+			GLint locTexture = glGetUniformLocation( particleProg.programId(), "uParticleTexture" );
+			
+			glUniformMatrix4fv( locVP, 1, GL_TRUE, viewProjection.v );
+			Vec3f camPos = camera.get_position();
+			glUniform3f( locCamPos, camPos.x, camPos.y, camPos.z );
+			glUniform1i( locTexture, 0 );  // Texture unit 0
+			
+			// Render particles
+			particleSystem.render(viewProjection, camPos);
+		}
+	}
+	
+	// Helper function to update a camera based on its mode (Task 1.9)
+	void update_camera_by_mode(
+		Camera& camera,
+		Camera& freeCamera,
+		CameraMode mode,
+		Vec3f const& current_vehicle_pos,
+		Mat44f const& vehicle_rotation,
+		Vec3f const& vehicleOriginalPos,
+		float deltaTime,
+		bool moveForward, bool moveBackward,
+		bool moveLeft, bool moveRight,
+		bool moveUp, bool moveDown,
+		bool speedBoost, bool speedSlow)
+	{
+		if (mode == CameraMode::Free)
+		{
+			// Free camera: update based on input
+			float baseSpeed = 20.f;
+			if (speedBoost) baseSpeed *= 3.f;
+			if (speedSlow) baseSpeed *= 0.2f;
+			
+			float moveDistance = baseSpeed * deltaTime;
+			
+			if (moveForward) camera.move_forward(moveDistance);
+			if (moveBackward) camera.move_backward(moveDistance);
+			if (moveLeft) camera.move_left(moveDistance);
+			if (moveRight) camera.move_right(moveDistance);
+			if (moveUp) camera.move_up(moveDistance);
+			if (moveDown) camera.move_down(moveDistance);
+			
+			// Update free camera state
+			freeCamera = camera;
+		}
+		else if (mode == CameraMode::Follow)
+		{
+			// Follow camera: fixed distance behind and above the vehicle
+			float followDistance = 30.0f;
+			float followHeight = 15.0f;
+			
+			// Get vehicle's forward direction from rotation matrix
+			Vec3f vehicleForward{ -vehicle_rotation.v[8], -vehicle_rotation.v[9], -vehicle_rotation.v[10] };
+			Vec3f vehicleUp{ vehicle_rotation.v[4], vehicle_rotation.v[5], vehicle_rotation.v[6] };
+			
+			// Position camera behind vehicle
+			Vec3f cameraOffset = -vehicleForward * followDistance + vehicleUp * followHeight;
+			Vec3f cameraPos = current_vehicle_pos + cameraOffset;
+			
+			camera.set_position(cameraPos);
+			camera.look_at(current_vehicle_pos);
+		}
+		else if (mode == CameraMode::Ground)
+		{
+			// Ground camera: fixed on ground, always looks at vehicle
+			Vec3f groundCameraPos = vehicleOriginalPos;
+			groundCameraPos.y = 5.0f;
+			groundCameraPos.x += 20.0f;
+			groundCameraPos.z += 20.0f;
+			
+			camera.set_position(groundCameraPos);
+			camera.look_at(current_vehicle_pos);
+		}
 	}
 	
 	void glfw_callback_error_( int, char const* );
@@ -202,6 +482,12 @@ int main() try
 	// Store initial free camera state
 	state.freeCamera = state.camera;
 	
+	// Initialize split screen cameras (Task 1.9)
+	state.leftCamera = state.camera;
+	state.leftFreeCamera = state.camera;
+	state.rightCamera = state.camera;
+	state.rightFreeCamera = state.camera;
+	
 	// Store state pointer in window user pointer
 	glfwSetWindowUserPointer( window, &state );
 
@@ -263,6 +549,12 @@ int main() try
 		{ GL_FRAGMENT_SHADER, "assets/cw2/material.frag" }
 	});
 	
+	// Shader for particles (Task 1.10)
+	ShaderProgram particleProg({
+		{ GL_VERTEX_SHADER, "assets/cw2/particle.vert" },
+		{ GL_FRAGMENT_SHADER, "assets/cw2/particle.frag" }
+	});
+	
 	// Load terrain mesh
 	std::print( "Loading terrain mesh (this may take a while...)\\n" );
 	SimpleObjMesh terrain = load_simple_obj( "assets/cw2/parlahti.obj" );
@@ -307,6 +599,78 @@ int main() try
 	}
 	std::print( "Space vehicle generated with {} parts\n", vehicle_parts.size() );
 	
+	// Create particle system for rocket exhaust (Task 1.10)
+	std::print( "Creating particle system...\n" );
+	ParticleSystem particleSystem(2000);  // Max 2000 particles
+	particleSystem.set_emission_rate(200.f);  // 200 particles per second
+	particleSystem.set_particle_lifetime(0.5f, 1.5f);  // 0.5-1.5 seconds
+	particleSystem.set_particle_size(0.8f, 2.0f);  // Size range
+	particleSystem.set_particle_velocity(10.f, 25.f);  // Speed range
+	particleSystem.set_emission_direction(Vec3f{0.f, -1.f, 0.f});  // Downward (exhaust)
+	particleSystem.set_emission_spread(0.4f);  // ~23 degree cone
+	std::print( "Particle system created\n" );
+	
+	// Create UI system (Task 1.11)
+	std::print( "Creating UI system...\n" );
+	UISystem uiSystem(iwidth, iheight);
+	
+	// Try to use system fonts (Windows)
+	const char* fontPaths[] = {
+		"C:/Windows/Fonts/Arial.ttf",           // Arial (capital A)
+		"C:/Windows/Fonts/arial.ttf",           // Arial (lowercase)
+		"C:/Windows/Fonts/calibri.ttf",         // Calibri
+		"C:/Windows/Fonts/segoeui.ttf",         // Segoe UI
+		"C:/Windows/Fonts/consola.ttf",         // Consolas
+		"C:/Windows/Fonts/verdana.ttf",         // Verdana
+		"assets/cw2/DroidSansMonoDotted.ttf"    // Fallback
+	};
+	
+	bool fontLoaded = false;
+	for (const char* fontPath : fontPaths)
+	{
+		std::print("Trying font: {}\n", fontPath);
+		if (uiSystem.initialize(fontPath))
+		{
+			std::print("✓ Successfully loaded font: {}\n", fontPath);
+			fontLoaded = true;
+			break;
+		}
+		else
+		{
+			std::print("✗ Failed to load: {}\n", fontPath);
+		}
+	}
+	
+	if (!fontLoaded)
+	{
+		std::print(stderr, "Failed to initialize UI system with any font\n");
+		return 1;
+	}
+	
+	// Add altitude label (top left) - larger font for better visibility
+	UILabel* altitudeLabel = uiSystem.add_label("Altitude: 0.0 m", 28.0f, UIAnchor::TopLeft, 10.0f, 10.0f);
+	altitudeLabel->set_color(Vec4f{1.0f, 1.0f, 0.0f, 1.0f});  // Yellow text
+	
+	// Add launch button (bottom center)
+	UIButton* launchButton = uiSystem.add_button("Launch", 120.0f, 40.0f, UIAnchor::BottomCenter, -70.0f, 60.0f,
+		[&state]() {
+			// Launch callback
+			state.animationActive = true;
+			state.animationPaused = false;
+			state.animationTime = 0.0;
+		});
+	
+	// Add reset button (bottom center, to the right of launch button)
+	UIButton* resetButton = uiSystem.add_button("Reset", 120.0f, 40.0f, UIAnchor::BottomCenter, 70.0f, 60.0f,
+		[&state]() {
+			// Reset callback
+			state.animationActive = false;
+			state.animationPaused = false;
+			state.animationTime = 0.0;
+		});
+	
+	std::print( "UI system created\n" );
+	
 	// Position vehicle on launchpad A (centered on pad, sitting on it)
 	// Main body: center at y=4, height=8, so bottom at y=0 (in local space)
 	// Launchpad is scaled 5x and positioned at launchpadA_pos.y = -1.f
@@ -343,6 +707,14 @@ int main() try
 	double lastTime = glfwGetTime();
 	double lastPrintTime = glfwGetTime();
 	
+	// Task 1.12: Performance measurement
+	// To enable: define ENABLE_PERFORMANCE_MEASUREMENT in performance_timer.hpp
+	// or add -DENABLE_PERFORMANCE_MEASUREMENT to compiler flags
+	PerformanceMeasurement perfMeasure;
+	perfMeasure.initialize();
+	int perfFrameCount = 0;
+	constexpr int PERF_REPORT_INTERVAL = 300;  // Report every 300 frames (~5 seconds at 60fps)
+	
 	// Main loop
 	while( !glfwWindowShouldClose( window ) )
 	{
@@ -355,13 +727,14 @@ int main() try
 		lastTime = currentTime;
 		
 		// Print camera position every second for debugging
-		if (currentTime - lastPrintTime > 1.0)
-		{
-			Vec3f camPos = state.camera.get_position();
-			std::print( "Camera position: ({:.1f}, {:.1f}, {:.1f})\n", 
-				camPos.x, camPos.y, camPos.z );
-			lastPrintTime = currentTime;
-		}
+		// Commented out to reduce console spam
+		//if (currentTime - lastPrintTime > 1.0)
+		//{
+		//	Vec3f camPos = state.camera.get_position();
+		//	std::print( "Camera position: ({:.1f}, {:.1f}, {:.1f})\n", 
+		//		camPos.x, camPos.y, camPos.z );
+		//	lastPrintTime = currentTime;
+		//}
 		
 		// Check if window was resized.
 		float fbwidth, fbheight;
@@ -383,6 +756,9 @@ int main() try
 			}
 
 			glViewport( 0, 0, nwidth, nheight );
+			
+			// Update UI system on window resize (Task 1.11)
+			uiSystem.on_window_resize(nwidth, nheight);
 		}
 
 		// Update animation
@@ -537,223 +913,182 @@ int main() try
 		pointLight1_pos = current_vehicle_pos + pointLight1_baseOffset;
 		pointLight2_pos = current_vehicle_pos + pointLight2_baseOffset;
 		pointLight3_pos = current_vehicle_pos + pointLight3_baseOffset;
+		
+		// Update particle system (Task 1.10)
+		// Emit from engine position (bottom of rocket)
+		Vec3f enginePos = current_vehicle_pos;
+		enginePos.y -= 0.5f;  // Slightly below vehicle center (engine nozzle)
+		bool emitting = state.animationActive && !state.animationPaused;
+		particleSystem.update(deltaTime, enginePos, emitting);
+		
+		// Update UI system (Task 1.11)
+		// Update altitude label
+		float altitude = current_vehicle_pos.y - state.vehicleOriginalPos.y;
+		char altitudeText[64];
+		std::snprintf(altitudeText, sizeof(altitudeText), "Altitude: %.1f m", altitude);
+		altitudeLabel->set_text(altitudeText);
+		
+		// Get mouse position for UI
+		double mouseX, mouseY;
+		glfwGetCursorPos(window, &mouseX, &mouseY);
+		bool mouseDown = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+		uiSystem.update(static_cast<float>(mouseX), static_cast<float>(mouseY), mouseDown);
 
-		// Update camera based on mode
-		if (state.cameraMode == CameraMode::Free)
+		// Update cameras based on mode (Task 1.9 - support split screen)
+		if (!state.splitScreenMode)
 		{
-			// Free camera: update based on input
-			float baseSpeed = 20.f; // units per second (reduced from 50)
-			if (state.speedBoost) baseSpeed *= 3.f; // 3x boost (reduced from 5x)
-			if (state.speedSlow) baseSpeed *= 0.2f;
-			
-			float moveDistance = baseSpeed * deltaTime;
-			
-			if (state.moveForward) state.camera.move_forward(moveDistance);
-			if (state.moveBackward) state.camera.move_backward(moveDistance);
-			if (state.moveLeft) state.camera.move_left(moveDistance);
-			if (state.moveRight) state.camera.move_right(moveDistance);
-			if (state.moveUp) state.camera.move_up(moveDistance);
-			if (state.moveDown) state.camera.move_down(moveDistance);
-			
-			// Update free camera state
-			state.freeCamera = state.camera;
-		}
-		else if (state.cameraMode == CameraMode::Follow)
-		{
-			// Follow camera: fixed distance behind and above the vehicle
-			float followDistance = 30.0f;  // Distance behind vehicle
-			float followHeight = 15.0f;    // Height above vehicle
-			
-			// Calculate camera position: behind and above the vehicle
-			// Get vehicle's forward direction from rotation matrix
-			Vec3f vehicleForward{ -vehicle_rotation.v[8], -vehicle_rotation.v[9], -vehicle_rotation.v[10] };
-			Vec3f vehicleUp{ vehicle_rotation.v[4], vehicle_rotation.v[5], vehicle_rotation.v[6] };
-			
-			// Position camera behind vehicle
-			Vec3f cameraOffset = -vehicleForward * followDistance + vehicleUp * followHeight;
-			Vec3f cameraPos = current_vehicle_pos + cameraOffset;
-			
-			state.camera.set_position(cameraPos);
-			state.camera.look_at(current_vehicle_pos);
-		}
-		else if (state.cameraMode == CameraMode::Ground)
-		{
-			// Ground camera: fixed on ground, always looks at vehicle
-			Vec3f groundCameraPos = state.vehicleOriginalPos;
-			groundCameraPos.y = 5.0f;  // Fixed height above ground
-			groundCameraPos.x += 20.0f;  // Slight offset for better view
-			groundCameraPos.z += 20.0f;
-			
-			state.camera.set_position(groundCameraPos);
-			state.camera.look_at(current_vehicle_pos);
-		}
-
-		// Draw scene
-		OGL_CHECKPOINT_DEBUG();
-
-		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-		
-		// Use shader program
-		glUseProgram( prog.programId() );
-		
-		// Calculate matrices
-		Mat44f model = kIdentity44f;
-		Mat44f view = state.camera.get_view_matrix();
-		Mat44f projection = make_perspective_projection(
-			60.f * std::numbers::pi_v<float> / 180.f,  // 60 degree FOV
-			fbwidth / fbheight,                         // aspect ratio
-			0.1f,                                       // near plane
-			10000.f                                     // far plane
-		);
-		
-		Mat44f mvp = projection * view * model;
-		
-		// Set uniforms
-		GLint locMVP = glGetUniformLocation( prog.programId(), "uModelViewProjection" );
-		GLint locModel = glGetUniformLocation( prog.programId(), "uModel" );
-		GLint locNormal = glGetUniformLocation( prog.programId(), "uNormalMatrix" );
-		GLint locTexture = glGetUniformLocation( prog.programId(), "uTexture" );
-		GLint locUseTexture = glGetUniformLocation( prog.programId(), "uUseTexture" );
-		
-		glUniformMatrix4fv( locMVP, 1, GL_TRUE, mvp.v );
-		glUniformMatrix4fv( locModel, 1, GL_TRUE, model.v );
-		
-		// Normal matrix (upper 3x3 of model matrix, for now just identity)
-		float normalMat[9] = { 1,0,0, 0,1,0, 0,0,1 };
-		glUniformMatrix3fv( locNormal, 1, GL_TRUE, normalMat );
-		
-		// Set lighting uniforms
-		Vec3f cameraPos = state.camera.get_position();
-		set_lighting_uniforms( prog.programId(), cameraPos,
-			dirLightDirection, dirLightColor,
-			pointLight1_pos, pointLight1_color,
-			pointLight2_pos, pointLight2_color,
-			pointLight3_pos, pointLight3_color,
-			shininess );
-		
-		// Bind texture if available
-		if (terrain_texture != 0)
-		{
-			glActiveTexture( GL_TEXTURE0 );
-			glBindTexture( GL_TEXTURE_2D, terrain_texture );
-			glUniform1i( locTexture, 0 );
-			glUniform1i( locUseTexture, 1 );
+			// Single screen mode: update main camera
+			update_camera_by_mode(
+				state.camera, state.freeCamera, state.cameraMode,
+				current_vehicle_pos, vehicle_rotation, state.vehicleOriginalPos,
+				deltaTime,
+				state.moveForward, state.moveBackward,
+				state.moveLeft, state.moveRight,
+				state.moveUp, state.moveDown,
+				state.speedBoost, state.speedSlow
+			);
 		}
 		else
 		{
-			glUniform1i( locUseTexture, 0 );
+			// Split screen mode: update both cameras
+			// Left camera
+			update_camera_by_mode(
+				state.leftCamera, state.leftFreeCamera, state.leftCameraMode,
+				current_vehicle_pos, vehicle_rotation, state.vehicleOriginalPos,
+				deltaTime,
+				state.moveForward, state.moveBackward,
+				state.moveLeft, state.moveRight,
+				state.moveUp, state.moveDown,
+				state.speedBoost, state.speedSlow
+			);
+			
+			// Right camera
+			update_camera_by_mode(
+				state.rightCamera, state.rightFreeCamera, state.rightCameraMode,
+				current_vehicle_pos, vehicle_rotation, state.vehicleOriginalPos,
+				deltaTime,
+				false, false, false, false, false, false,  // Right camera doesn't respond to keyboard
+				false, false
+			);
+		}
+
+		// Draw scene (Task 1.9 - support split screen)
+		OGL_CHECKPOINT_DEBUG();
+
+		// Task 1.12: Begin frame timing
+		perfMeasure.begin_frame();
+		perfMeasure.begin_cpu_timing();  // Start CPU timing for command submission
+
+		glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+		
+		if (!state.splitScreenMode)
+		{
+			// Single screen mode: render once with full viewport
+			glViewport( 0, 0, static_cast<GLsizei>(fbwidth), static_cast<GLsizei>(fbheight) );
+			
+			render_scene(
+				state.camera, fbwidth, fbheight,
+				prog, materialProg, particleProg,
+				terrain, terrain_texture,
+				launchpad, launchpadA_pos, launchpadB_pos,
+				vehicle_parts, current_vehicle_pos, vehicle_rotation,
+				dirLightDirection, dirLightColor,
+				pointLight1_pos, pointLight1_color,
+				pointLight2_pos, pointLight2_color,
+				pointLight3_pos, pointLight3_color,
+				shininess,
+				particleSystem,
+				&perfMeasure  // Pass performance measurement
+			);
+		}
+		else
+		{
+			// Split screen mode: render twice with half viewports
+			// Note: In split screen, we only measure the left view for simplicity
+			
+			// Left view
+			glViewport( 0, 0, static_cast<GLsizei>(fbwidth / 2), static_cast<GLsizei>(fbheight) );
+			glEnable( GL_SCISSOR_TEST );
+			glScissor( 0, 0, static_cast<GLsizei>(fbwidth / 2), static_cast<GLsizei>(fbheight) );
+			glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+			glDisable( GL_SCISSOR_TEST );
+			
+			render_scene(
+				state.leftCamera, fbwidth / 2, fbheight,
+				prog, materialProg, particleProg,
+				terrain, terrain_texture,
+				launchpad, launchpadA_pos, launchpadB_pos,
+				vehicle_parts, current_vehicle_pos, vehicle_rotation,
+				dirLightDirection, dirLightColor,
+				pointLight1_pos, pointLight1_color,
+				pointLight2_pos, pointLight2_color,
+				pointLight3_pos, pointLight3_color,
+				shininess,
+				particleSystem,
+				&perfMeasure  // Measure left view
+			);
+			
+			// Right view
+			glViewport( static_cast<GLsizei>(fbwidth / 2), 0, static_cast<GLsizei>(fbwidth / 2), static_cast<GLsizei>(fbheight) );
+			glEnable( GL_SCISSOR_TEST );
+			glScissor( static_cast<GLsizei>(fbwidth / 2), 0, static_cast<GLsizei>(fbwidth / 2), static_cast<GLsizei>(fbheight) );
+			glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+			glDisable( GL_SCISSOR_TEST );
+			
+			render_scene(
+				state.rightCamera, fbwidth / 2, fbheight,
+				prog, materialProg, particleProg,
+				terrain, terrain_texture,
+				launchpad, launchpadA_pos, launchpadB_pos,
+				vehicle_parts, current_vehicle_pos, vehicle_rotation,
+				dirLightDirection, dirLightColor,
+				pointLight1_pos, pointLight1_color,
+				pointLight2_pos, pointLight2_color,
+				pointLight3_pos, pointLight3_color,
+				shininess,
+				particleSystem
+				// Don't measure right view to avoid double-counting
+			);
+			
+			// Restore full viewport
+			glViewport( 0, 0, static_cast<GLsizei>(fbwidth), static_cast<GLsizei>(fbheight) );
 		}
 		
-		// Draw terrain
-		glBindVertexArray( terrain.vao );
-		glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(terrain.indices.size()), GL_UNSIGNED_INT, nullptr );
-		glBindVertexArray( 0 );
+		// Render UI (Task 1.11) - render last so it appears on top
+		uiSystem.render();
 
-		// Draw two launchpad instances with material color
-		{
-			glUseProgram( materialProg.programId() );
-			GLint locMVP_mat = glGetUniformLocation( materialProg.programId(), "uModelViewProjection" );
-			GLint locModel_mat = glGetUniformLocation( materialProg.programId(), "uModel" );
-			GLint locNormal_mat = glGetUniformLocation( materialProg.programId(), "uNormalMatrix" );
-			GLint locMatColor   = glGetUniformLocation( materialProg.programId(), "uMaterialColor" );
-
-			// Set lighting uniforms for material shader
-			Vec3f cameraPos = state.camera.get_position();
-			set_lighting_uniforms( materialProg.programId(), cameraPos,
-				dirLightDirection, dirLightColor,
-				pointLight1_pos, pointLight1_color,
-				pointLight2_pos, pointLight2_color,
-				pointLight3_pos, pointLight3_color,
-				shininess );
-
-			float normalMat3[9] = { 1,0,0, 0,1,0, 0,0,1 };
-			Vec3f matCol = launchpad.has_material_color ? launchpad.material_color : Vec3f{0.8f,0.8f,0.8f};
-
-			// Instance A: scaled 5x
-			{
-				Mat44f S = kIdentity44f;
-				S.v[0] = 5.0f; S.v[5] = 5.0f; S.v[10] = 5.0f;
-				Mat44f T = make_translation( launchpadA_pos );
-				Mat44f M = T * S;
-				Mat44f MVP = projection * view * M;
-				glUniformMatrix4fv( locMVP_mat, 1, GL_TRUE, MVP.v );
-				glUniformMatrix4fv( locModel_mat, 1, GL_TRUE, M.v );
-				glUniformMatrix3fv( locNormal_mat, 1, GL_TRUE, normalMat3 );
-				glUniform3f( locMatColor, matCol.x, matCol.y, matCol.z );
-				glBindVertexArray( launchpad.vao );
-				glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(launchpad.indices.size()), GL_UNSIGNED_INT, nullptr );
-				glBindVertexArray( 0 );
-			}
-
-			// Instance B: scaled 5x
-			{
-				Mat44f S = kIdentity44f;
-				S.v[0] = 5.0f; S.v[5] = 5.0f; S.v[10] = 5.0f;
-				Mat44f T = make_translation( launchpadB_pos );
-				Mat44f M = T * S;
-				Mat44f MVP = projection * view * M;
-				glUniformMatrix4fv( locMVP_mat, 1, GL_TRUE, MVP.v );
-				glUniformMatrix4fv( locModel_mat, 1, GL_TRUE, M.v );
-				glUniformMatrix3fv( locNormal_mat, 1, GL_TRUE, normalMat3 );
-				glUniform3f( locMatColor, matCol.x, matCol.y, matCol.z );
-				glBindVertexArray( launchpad.vao );
-				glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(launchpad.indices.size()), GL_UNSIGNED_INT, nullptr );
-				glBindVertexArray( 0 );
-			}
-		}
-
-		// Draw space vehicle on launchpad A
-		{
-			glUseProgram( materialProg.programId() );
-			GLint locMVP_mat = glGetUniformLocation( materialProg.programId(), "uModelViewProjection" );
-			GLint locModel_mat = glGetUniformLocation( materialProg.programId(), "uModel" );
-			GLint locNormal_mat = glGetUniformLocation( materialProg.programId(), "uNormalMatrix" );
-			GLint locMatColor   = glGetUniformLocation( materialProg.programId(), "uMaterialColor" );
-
-			// Set lighting uniforms for material shader
-			Vec3f cameraPos = state.camera.get_position();
-			set_lighting_uniforms( materialProg.programId(), cameraPos,
-				dirLightDirection, dirLightColor,
-				pointLight1_pos, pointLight1_color,
-				pointLight2_pos, pointLight2_color,
-				pointLight3_pos, pointLight3_color,
-				shininess );
-
-			// Transform to place vehicle (with animation)
-			Mat44f vehicle_translate = make_translation(current_vehicle_pos);
-			Mat44f vehicle_model = vehicle_translate * vehicle_rotation;
-			
-			// Calculate normal matrix (for now identity since we're only translating)
-			float normalMat3[9] = { 1,0,0, 0,1,0, 0,0,1 };
-			
-			// Render each part with its own color
-			for (const auto& part : vehicle_parts)
-			{
-				Mat44f MVP = projection * view * vehicle_model;
-				glUniformMatrix4fv( locMVP_mat, 1, GL_TRUE, MVP.v );
-				glUniformMatrix4fv( locModel_mat, 1, GL_TRUE, vehicle_model.v );
-				glUniformMatrix3fv( locNormal_mat, 1, GL_TRUE, normalMat3 );
-				glUniform3f( locMatColor, part.color.x, part.color.y, part.color.z );
-				
-				glBindVertexArray( part.mesh.vao );
-				glDrawElements( GL_TRIANGLES, static_cast<GLsizei>(part.mesh.indices.size()), GL_UNSIGNED_INT, nullptr );
-				glBindVertexArray( 0 );
-			}
-		}
+		// Task 1.12: End CPU timing (command submission complete)
+		perfMeasure.end_cpu_timing_ms();
 
 		OGL_CHECKPOINT_DEBUG();
+
+		// Task 1.12: End frame timing (before swap buffers)
+		perfMeasure.end_frame();
+		
+		// Task 1.12: Periodic performance report
+		++perfFrameCount;
+		if (perfFrameCount >= PERF_REPORT_INTERVAL && perfMeasure.has_results())
+		{
+			perfMeasure.print_summary();
+			perfFrameCount = 0;
+		}
 
 		// Display results
 		glfwSwapBuffers( window );
 	}
 
 	// Cleanup.
+	// Task 1.12: Print final performance summary and cleanup
+	perfMeasure.print_summary();
+	perfMeasure.cleanup();
+	
 	terrain.cleanup();
 	launchpad.cleanup();
 	for (auto& part : vehicle_parts)
 	{
 		part.mesh.cleanup();
 	}
+	particleSystem.cleanup();  // Task 1.10
 	if (terrain_texture != 0)
 		glDeleteTextures(1, &terrain_texture);
 	
@@ -832,25 +1167,94 @@ namespace
 			state->animationTime = 0.0;
 		}
 		
-		// Camera mode switching
+		// Split screen toggle (Task 1.9)
+		if( aKey == GLFW_KEY_V && isPress )
+		{
+			state->splitScreenMode = !state->splitScreenMode;
+			
+			// When entering split screen, sync cameras
+			if( state->splitScreenMode )
+			{
+				state->leftCamera = state->camera;
+				state->leftCameraMode = state->cameraMode;
+				state->leftFreeCamera = state->freeCamera;
+				state->rightCamera = state->camera;
+				state->rightCameraMode = CameraMode::Follow;  // Default right to Follow mode
+				state->rightFreeCamera = state->camera;
+			}
+			else
+			{
+				// When exiting split screen, restore main camera from left
+				state->camera = state->leftCamera;
+				state->cameraMode = state->leftCameraMode;
+				state->freeCamera = state->leftFreeCamera;
+			}
+		}
+		
+		// Camera mode switching (Task 1.9 - support split screen)
 		if( aKey == GLFW_KEY_C && isPress )
 		{
-			// Cycle through camera modes: Free -> Follow -> Ground -> Free
-			if( state->cameraMode == CameraMode::Free )
+			// Check if Shift is pressed
+			bool shiftPressed = (glfwGetKey(aWindow, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+			                     glfwGetKey(aWindow, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
+			
+			if( !state->splitScreenMode )
 			{
-				state->cameraMode = CameraMode::Follow;
-				// Save current free camera state
-				state->freeCamera = state->camera;
+				// Single screen mode: cycle main camera
+				if( state->cameraMode == CameraMode::Free )
+				{
+					state->cameraMode = CameraMode::Follow;
+					state->freeCamera = state->camera;
+				}
+				else if( state->cameraMode == CameraMode::Follow )
+				{
+					state->cameraMode = CameraMode::Ground;
+				}
+				else // Ground
+				{
+					state->cameraMode = CameraMode::Free;
+					state->camera = state->freeCamera;
+				}
 			}
-			else if( state->cameraMode == CameraMode::Follow )
+			else
 			{
-				state->cameraMode = CameraMode::Ground;
-			}
-			else // Ground
-			{
-				state->cameraMode = CameraMode::Free;
-				// Restore free camera state
-				state->camera = state->freeCamera;
+				// Split screen mode: C cycles left camera, Shift+C cycles right camera
+				if( !shiftPressed )
+				{
+					// Cycle left camera mode
+					if( state->leftCameraMode == CameraMode::Free )
+					{
+						state->leftCameraMode = CameraMode::Follow;
+						state->leftFreeCamera = state->leftCamera;
+					}
+					else if( state->leftCameraMode == CameraMode::Follow )
+					{
+						state->leftCameraMode = CameraMode::Ground;
+					}
+					else // Ground
+					{
+						state->leftCameraMode = CameraMode::Free;
+						state->leftCamera = state->leftFreeCamera;
+					}
+				}
+				else
+				{
+					// Cycle right camera mode (Shift+C)
+					if( state->rightCameraMode == CameraMode::Free )
+					{
+						state->rightCameraMode = CameraMode::Follow;
+						state->rightFreeCamera = state->rightCamera;
+					}
+					else if( state->rightCameraMode == CameraMode::Follow )
+					{
+						state->rightCameraMode = CameraMode::Ground;
+					}
+					else // Ground
+					{
+						state->rightCameraMode = CameraMode::Free;
+						state->rightCamera = state->rightFreeCamera;
+					}
+				}
 			}
 		}
 	}
@@ -860,8 +1264,9 @@ namespace
 		auto* state = static_cast<State*>(glfwGetWindowUserPointer( aWindow ));
 		if( !state ) return;
 		
-		// Only allow mouse control in Free camera mode
-		if( state->cameraMode != CameraMode::Free )
+		// Only allow mouse control in Free camera mode (Task 1.9 - check appropriate camera)
+		CameraMode currentMode = state->splitScreenMode ? state->leftCameraMode : state->cameraMode;
+		if( currentMode != CameraMode::Free )
 			return;
 		
 		if( aButton == GLFW_MOUSE_BUTTON_RIGHT && aAction == GLFW_PRESS )
@@ -884,8 +1289,10 @@ namespace
 	void glfw_callback_mouse_move_( GLFWwindow* aWindow, double aX, double aY )
 	{
 		auto* state = static_cast<State*>(glfwGetWindowUserPointer( aWindow ));
-		// Only allow mouse control in Free camera mode
-		if( !state || !state->mouseActive || state->cameraMode != CameraMode::Free ) return;
+		
+		// Only allow mouse control in Free camera mode (Task 1.9 - check appropriate camera)
+		CameraMode currentMode = state->splitScreenMode ? state->leftCameraMode : state->cameraMode;
+		if( !state || !state->mouseActive || currentMode != CameraMode::Free ) return;
 		
 		// Calculate mouse delta
 		double deltaX = aX - state->lastMouseX;
@@ -897,9 +1304,18 @@ namespace
 		// Mouse sensitivity
 		float const sensitivity = 0.002f;
 		
-		// Update camera rotation
-		state->camera.rotate_yaw( static_cast<float>(deltaX) * sensitivity );
-		state->camera.rotate_pitch( static_cast<float>(-deltaY) * sensitivity );
+		// Update camera rotation (Task 1.9 - update appropriate camera)
+		if( !state->splitScreenMode )
+		{
+			state->camera.rotate_yaw( static_cast<float>(deltaX) * sensitivity );
+			state->camera.rotate_pitch( static_cast<float>(-deltaY) * sensitivity );
+		}
+		else
+		{
+			// In split screen mode, control left camera
+			state->leftCamera.rotate_yaw( static_cast<float>(deltaX) * sensitivity );
+			state->leftCamera.rotate_pitch( static_cast<float>(-deltaY) * sensitivity );
+		}
 	}
 
 }

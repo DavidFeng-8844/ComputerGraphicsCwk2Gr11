@@ -1,0 +1,65 @@
+\documentclass[10pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{helvet}
+\usepackage{inconsolata}
+\usepackage{amsmath}
+
+\geometry{margin=0.75in}
+\renewcommand{\familydefault}{\sfdefault}
+\setlength{\parskip}{0.4em}
+\setlength{\parindent}{0pt}
+
+\hypersetup{colorlinks=true,linkcolor=blue!60!black,urlcolor=blue!60!black}
+
+\begin{document}
+
+\begin{center}
+\textbf{\large Task 1.8: Camera Tracking Modes}\\[0.3em]
+\textit{COMP3811 Computer Graphics -- Coursework 2}
+\end{center}
+
+\textbf{Overview.}
+This section describes the implementation of an advanced camera system that allows users to switch between different viewing perspectives during the space vehicle simulation. To enhance the cinematic experience of the rocket launch, two automated tracking modes have been added alongside the standard free-roam camera: a "Follow" camera that chases the vehicle, and a "Ground" camera that acts as a fixed spectator viewpoint.
+
+\textbf{Camera State Management.}
+The camera system is architected around a state machine implemented within the main application loop. An enumeration \texttt{CameraMode} defines three distinct states: \texttt{Free}, \texttt{Follow}, and \texttt{Ground}.
+
+User interaction is handled via the \texttt{C} key. A cycling mechanism allows the user to transition sequentially through the modes:
+\[ \text{Free} \xrightarrow{\text{Press C}} \text{Follow} \xrightarrow{\text{Press C}} \text{Ground} \xrightarrow{\text{Press C}} \text{Free} \]
+
+Crucially, when switching away from the \texttt{Free} camera mode, the current position and orientation of the user-controlled camera are saved to a temporary buffer (\texttt{state.freeCamera}). When the user cycles back to the \texttt{Free} mode, this state is restored, ensuring a seamless user experience where manual camera adjustments are preserved.
+
+\textbf{Follow Camera (Chase View).}
+The Follow camera is designed to maintain a fixed relative position behind and above the space vehicle, regardless of its orientation or position in world space. This requires transforming the camera's position into the vehicle's local coordinate system.
+
+The algorithm calculates the camera position $P_{cam}$ using the vehicle's current position $P_{veh}$, its forward vector $\mathbf{f}$, and its up vector $\mathbf{u}$ (extracted from the vehicle's rotation matrix):
+\[
+P_{cam} = P_{veh} - (\mathbf{f} \cdot d_{follow}) + (\mathbf{u} \cdot h_{follow})
+\]
+where $d_{follow} = 30.0$ is the distance behind the vehicle and $h_{follow} = 15.0$ is the height above it.
+
+Once positioned, the camera's view matrix is updated using a \texttt{look\_at} function targeting the vehicle's center ($P_{veh}$). This ensures the vehicle remains perfectly centered in the frame while the background rotates dynamically, creating a sensation of speed and motion.
+
+\textbf{Ground Camera (Spectator View).}
+The Ground camera simulates a fixed tracking station or a spectator standing near the launchpad. Unlike the Follow camera, its position is static in world space, fixed relative to the launchpad coordinates:
+\[
+P_{ground} = P_{launchpad} + (20, 5, 20)
+\]
+This places the camera slightly elevated (5 units up) and offset from the launch center.
+
+While the position is fixed, the orientation is dynamic. In every frame, the camera re-calculates its view matrix to look directly at the current position of the vehicle ($P_{veh}$). As the rocket ascends and curves away, the camera rotates to track it, providing a stable frame of reference that emphasizes the vehicle's altitude and trajectory.
+
+\textbf{Visual Results.}
+
+\textbf{[Figure 1.8.1: The Follow camera mode, showing the vehicle from behind as it ascends.]}
+
+\textbf{[Figure 1.8.2: The Ground camera mode, looking up at the vehicle from the launch site.]}
+
+\end{document}
+

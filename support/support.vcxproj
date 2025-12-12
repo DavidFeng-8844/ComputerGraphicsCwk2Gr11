@@ -105,22 +105,30 @@
     <ClInclude Include="debug_output.hpp" />
     <ClInclude Include="defaults.hpp" />
     <ClInclude Include="error.hpp" />
+    <ClInclude Include="fontstash_gl.hpp" />
+    <ClInclude Include="particle_system.hpp" />
     <ClInclude Include="primitive_shapes.hpp" />
     <ClInclude Include="program.hpp" />
     <ClInclude Include="simple_obj.hpp" />
     <ClInclude Include="space_vehicle.hpp" />
     <ClInclude Include="texture.hpp" />
+    <ClInclude Include="ui_system.hpp" />
+    <ClInclude Include="performance_timer.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="checkpoint.cpp" />
     <ClCompile Include="debug_output.cpp" />
     <ClCompile Include="error.cpp" />
+    <ClCompile Include="fontstash_gl.cpp" />
+    <ClCompile Include="particle_system.cpp" />
     <ClCompile Include="primitive_shapes.cpp" />
     <ClCompile Include="program.cpp" />
     <ClCompile Include="simple_obj.cpp" />
     <ClCompile Include="space_vehicle.cpp" />
     <ClCompile Include="texture.cpp" />
+    <ClCompile Include="ui_system.cpp" />
+    <ClCompile Include="performance_timer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
