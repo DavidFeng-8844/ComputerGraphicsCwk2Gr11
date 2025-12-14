@@ -146,6 +146,8 @@ project "support"
 
 	files( sources )
 
+    links "vmlib"
+
 	filter "*"
 
 project "vmlib"
