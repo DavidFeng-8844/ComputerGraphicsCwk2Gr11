@@ -21,6 +21,8 @@ x64/
 x86/
 Win32/
 *.exe
+# !premake5.exe
+# !premake5
 *.dll
 *.lib
 *.pdb
