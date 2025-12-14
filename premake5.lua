@@ -95,8 +95,8 @@ project "main"
 	dependson "main-shaders"
 	dependson "x-rapidobj"
 
-	links "vmlib"
 	links "support"
+	links "vmlib"
 
 	links "x-stb"
 	links "x-glad"
